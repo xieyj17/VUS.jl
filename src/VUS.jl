@@ -1,11 +1,10 @@
 module VUS
 
+using Base.Threads
 using DataFrames, Statistics, StatsBase, Plots, ROCAnalysis, ProgressMeter, CategoricalArrays
 
-# Note: We no longer need `using Distributed`
 export generate_binned_df, calculate_roc_and_auc, get_vus, plot_vus, bootstrap_vus
 
-# ... (generate_binned_df, calculate_roc_and_auc, and get_vus functions remain the same) ...
 
 function generate_binned_df(df::DataFrame; num_bins::Int=100)
     df_copy = copy(df)
@@ -76,18 +75,26 @@ function bootstrap_vus(original_df::DataFrame; n_bootstraps::Int=1000, alpha::Fl
     println("Starting multi-threaded bootstrapping with $n_bootstraps samples on $(Threads.nthreads()) threads...")
     game_numbers = unique(original_df.game_num)
     
-    # Pre-allocate an array to store the results from each thread
     vus_results = zeros(n_bootstraps)
     
-    # Use the @threads macro for a parallel for loop
+    p = Progress(n_bootstraps, "Bootstrapping...")
+    lk = ReentrantLock()
+
     Threads.@threads for i in 1:n_bootstraps
+        # Perform the core calculation
         vus_results[i] = _bootstrap_iteration(original_df, game_numbers, num_bins)
+        
+        # Update the progress meter inside a lock
+        lock(lk)
+        try
+            next!(p)
+        finally
+            unlock(lk)
+        end
     end
     
-    # Filter out any potential NaN results before calculating percentiles
     vus_distribution = filter(!isnan, vus_results)
     
-    # Calculate confidence interval
     lower_bound = percentile(vus_distribution, (alpha / 2) * 100)
     upper_bound = percentile(vus_distribution, (1 - alpha / 2) * 100)
 

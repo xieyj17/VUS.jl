@@ -28,9 +28,6 @@ const TEAM_NAME_MAP = Dict(
 
 # --- Helper Functions ---
 function time_to_seconds(time_str)
-    # --- FIX ---
-    # The `isa` function can only check against one type at a time.
-    # We split the check into `isa(time_str, Int)` and `isa(time_str, Float64)`.
     if isa(time_str, Int) || isa(time_str, Float64)
         return float(time_str)
     end
